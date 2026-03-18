@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <title>تحميل مستودع GitHub</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <style>
+        body { background: #f4f6fa; direction: rtl; font-family: 'Tajawal', sans-serif; }
+        .card { margin: auto; margin-top: 60px; max-width: 420px; box-shadow: 0 2px 8px #b2bec3; }
+        .repo-title { font-size: 1.2em; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <div class="card p-4">
+        <h3 class="mb-3 text-center">تحميل مستودع GitHub بالكامل</h3>
+        <form method="post">
+            <div class="mb-2">
+                <input type="text" name="repo_url" placeholder="https://github.com/owner/repo" class="form-control" value="{{ repo_url }}">
+            </div>
+            <div class="mb-2">
+                فرع <input type="text" name="branch" placeholder="main" class="form-control d-inline-block" style="width:120px;" value="{{ branch }}">
+            </div>
+            <button type="submit" class="btn btn-primary w-100 mt-2">بحث</button>
+        </form>
+        {% if error %}
+            <div class="alert alert-danger mt-3">{{ error }}</div>
+        {% endif %}
+        {% if repo_info %}
+        <div class="mt-4">
+            <div class="repo-title"><strong>اسم المستودع:</strong> {{ repo_info.name }}</div>
+            <div>
+                <strong>المالك:</strong> {{ repo_info.owner.login }}
+                {% if repo_info.owner.avatar_url %}
+                  <img src="{{ repo_info.owner.avatar_url }}" width="32" height="32" style="border-radius:50%;" alt="Avatar">
+                {% endif %}
+            </div>
+            {% if repo_info.description %}
+            <div class="mt-1"><strong>الوصف:</strong> {{ repo_info.description }}</div>
+            {% endif %}
+        </div>
+        <a href="{{ zip_url }}" class="btn btn-success mt-4 w-100" target="_blank">
+            تحميل المستودع بالكامل كملف ZIP
+        </a>
+        {% endif %}
+    </div>
+</body>
+</html>

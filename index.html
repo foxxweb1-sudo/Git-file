@@ -1,47 +1,172 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>تحميل مستودع GitHub</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مستخرج ملفات جيت هب</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background: #f4f6fa; direction: rtl; font-family: 'Tajawal', sans-serif; }
-        .card { margin: auto; margin-top: 60px; max-width: 420px; box-shadow: 0 2px 8px #b2bec3; }
-        .repo-title { font-size: 1.2em; margin-bottom: 8px; }
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans Arabic', sans-serif; }
+        .file-content { direction: ltr; text-align: left; font-family: monospace; }
     </style>
 </head>
-<body>
-    <div class="card p-4">
-        <h3 class="mb-3 text-center">تحميل مستودع GitHub بالكامل</h3>
-        <form method="post">
-            <div class="mb-2">
-                <input type="text" name="repo_url" placeholder="https://github.com/owner/repo" class="form-control" value="{{ repo_url }}">
+<body class="bg-gray-100 min-h-screen">
+
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <h1 class="text-2xl font-bold text-gray-800 mb-4 text-center">مستخرج ملفات GitHub</h1>
+            
+            <div class="flex flex-col md:flex-row gap-2">
+                <input type="text" id="repoUrl" placeholder="أدخل رابط المشروع (e.g. https://github.com/user/repo)" 
+                       class="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button onclick="loadRepo('')" id="btnFetch" 
+                        class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">
+                    استخراج الملفات
+                </button>
             </div>
-            <div class="mb-2">
-                فرع <input type="text" name="branch" placeholder="main" class="form-control d-inline-block" style="width:120px;" value="{{ branch }}">
-            </div>
-            <button type="submit" class="btn btn-primary w-100 mt-2">بحث</button>
-        </form>
-        {% if error %}
-            <div class="alert alert-danger mt-3">{{ error }}</div>
-        {% endif %}
-        {% if repo_info %}
-        <div class="mt-4">
-            <div class="repo-title"><strong>اسم المستودع:</strong> {{ repo_info.name }}</div>
-            <div>
-                <strong>المالك:</strong> {{ repo_info.owner.login }}
-                {% if repo_info.owner.avatar_url %}
-                  <img src="{{ repo_info.owner.avatar_url }}" width="32" height="32" style="border-radius:50%;" alt="Avatar">
-                {% endif %}
-            </div>
-            {% if repo_info.description %}
-            <div class="mt-1"><strong>الوصف:</strong> {{ repo_info.description }}</div>
-            {% endif %}
+            <p id="errorMsg" class="text-red-500 mt-2 hidden"></p>
         </div>
-        <a href="{{ zip_url }}" class="btn btn-success mt-4 w-100" target="_blank">
-            تحميل المستودع بالكامل كملف ZIP
-        </a>
-        {% endif %}
+
+        <!-- عرض المسار الحالي -->
+        <div id="breadcrumb" class="mb-4 text-sm text-gray-600 flex gap-2"></div>
+
+        <!-- قائمة الملفات -->
+        <div class="bg-white rounded-xl shadow-md overflow-hidden">
+            <ul id="fileList" class="divide-y divide-gray-200">
+                <li class="p-8 text-center text-gray-400">أدخل رابطاً للبدء في تصفح الملفات</li>
+            </ul>
+        </div>
+
+        <!-- عرض محتوى الملف -->
+        <div id="contentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-xl w-full max-w-3xl max-h-[80vh] flex flex-col">
+                <div class="p-4 border-b flex justify-between items-center bg-gray-50">
+                    <h3 id="fileName" class="font-bold text-gray-700">محتوى الملف</h3>
+                    <button onclick="closeModal()" class="text-gray-500 hover:text-red-500 text-xl font-bold">&times;</button>
+                </div>
+                <div class="p-4 overflow-auto bg-gray-900 text-green-400 file-content flex-1">
+                    <pre id="fileBody" class="whitespace-pre-wrap text-sm"></pre>
+                </div>
+            </div>
+        </div>
     </div>
+
+    <script>
+        let currentUrl = '';
+
+        async function loadRepo(path) {
+            const urlInput = document.getElementById('repoUrl').value;
+            const errorMsg = document.getElementById('errorMsg');
+            const fileList = document.getElementById('fileList');
+            const btn = document.getElementById('btnFetch');
+
+            if (!urlInput) return;
+            currentUrl = urlInput;
+
+            errorMsg.classList.add('hidden');
+            fileList.innerHTML = '<li class="p-8 text-center"><div class="animate-spin inline-block w-6 h-6 border-4 border-blue-500 border-t-transparent rounded-full"></div> جاري التحميل...</li>';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/fetch-repo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: urlInput, path: path })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) throw new Error(data.error || 'فشل الاتصال');
+
+                renderFiles(data);
+                updateBreadcrumb(path);
+            } catch (err) {
+                errorMsg.innerText = err.message;
+                errorMsg.classList.remove('hidden');
+                fileList.innerHTML = '<li class="p-8 text-center text-red-400 italic">فشل جلب البيانات. تأكد من الرابط.</li>';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function renderFiles(items) {
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = '';
+
+            if (!Array.isArray(items)) {
+                // إذا كان ملفاً واحداً (عرض محتواه مباشرة)
+                showFileContent(items.name, items.download_url);
+                return;
+            }
+
+            items.sort((a, b) => (a.type === b.type ? 0 : a.type === 'dir' ? -1 : 1));
+
+            items.forEach(item => {
+                const li = document.createElement('li');
+                li.className = "p-4 hover:bg-gray-50 cursor-pointer flex items-center justify-between transition";
+                
+                const icon = item.type === 'dir' ? '📁' : '📄';
+                const size = item.size ? `(${(item.size / 1024).toFixed(1)} KB)` : '';
+
+                li.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <span class="text-xl">${icon}</span>
+                        <div>
+                            <span class="font-medium text-gray-700">${item.name}</span>
+                            <span class="text-xs text-gray-400 block">${item.type === 'dir' ? 'مجلد' : 'ملف ' + size}</span>
+                        </div>
+                    </div>
+                    <span class="text-gray-300">➜</span>
+                `;
+
+                li.onclick = () => {
+                    if (item.type === 'dir') {
+                        loadRepo(item.path);
+                    } else {
+                        showFileContent(item.name, item.download_url);
+                    }
+                };
+                fileList.appendChild(li);
+            });
+        }
+
+        async function showFileContent(name, downloadUrl) {
+            if (!downloadUrl) return;
+            
+            document.getElementById('fileName').innerText = name;
+            document.getElementById('fileBody').innerText = "جاري تحميل المحتوى...";
+            document.getElementById('contentModal').classList.remove('hidden');
+
+            try {
+                const res = await fetch(downloadUrl);
+                const text = await res.text();
+                document.getElementById('fileBody').innerText = text;
+            } catch (err) {
+                document.getElementById('fileBody').innerText = "خطأ في تحميل الملف.";
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('contentModal').classList.add('hidden');
+        }
+
+        function updateBreadcrumb(path) {
+            const bc = document.getElementById('breadcrumb');
+            if (!path) {
+                bc.innerHTML = '<span class="text-blue-600 font-bold">الرئيسية</span>';
+                return;
+            }
+            const parts = path.split('/');
+            let html = '<button onclick="loadRepo(\'\')" class="text-blue-500 hover:underline">الرئيسية</button>';
+            let fullPath = '';
+            parts.forEach((p, i) => {
+                fullPath += (i === 0 ? '' : '/') + p;
+                html += ` <span class="text-gray-400">/</span> <button onclick="loadRepo('${fullPath}')" class="text-blue-500 hover:underline">${p}</button>`;
+            });
+            bc.innerHTML = html;
+        }
+    </script>
 </body>
 </html>
+

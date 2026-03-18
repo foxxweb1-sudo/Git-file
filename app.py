@@ -1,40 +1,50 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
 import requests
 
 app = Flask(__name__)
 
-def get_repo_info(owner, repo):
-    url = f'https://api.github.com/repos/{owner}/{repo}'
-    resp = requests.get(url)
-    if resp.status_code == 200:
-        return resp.json()
-    else:
-        return None
+# إعدادات GitHub API
+GITHUB_API_URL = "https://api.github.com/repos"
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/')
 def index():
-    repo_url = ''
-    branch = 'main'
-    repo_info = None
-    error = ''
-    owner = ''
-    repo = ''
-    zip_url = ''
-    if request.method == 'POST':
-        repo_url = request.form['repo_url'].strip()
-        branch = request.form.get('branch', 'main').strip()
+    # عرض الصفحة الرئيسية
+    return render_template('index.html')
+
+@app.route('/fetch-repo', methods=['POST'])
+def fetch_repo():
+    data = request.json
+    repo_url = data.get('url', '').strip()
+    
+    if not repo_url:
+        return jsonify({"error": "الرجاء إدخال رابط صحيح"}), 400
+
+    try:
+        # تحليل الرابط لاستخراج المالك واسم المستودع
+        # مثال: https://github.com/owner/repo
         parts = repo_url.rstrip('/').split('/')
-        if len(parts) >= 5:
-            owner = parts[-2]
-            repo = parts[-1]
-            repo_info = get_repo_info(owner, repo)
-            if repo_info:
-                zip_url = f"https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.zip"
-            else:
-                error = "لم يتم العثور على المستودع. تأكد من صحة الرابط."
+        if 'github.com' not in parts or len(parts) < 5:
+            return jsonify({"error": "تنسيق رابط GitHub غير صحيح"}), 400
+        
+        owner = parts[-2]
+        repo = parts[-1]
+        path = data.get('path', '')
+
+        # طلب البيانات من GitHub API
+        api_url = f"{GITHUB_API_URL}/{owner}/{repo}/contents/{path}"
+        response = requests.get(api_url)
+        
+        if response.status_code == 200:
+            return jsonify(response.json())
+        elif response.status_code == 404:
+            return jsonify({"error": "المستودع أو الملف غير موجود"}), 404
         else:
-            error = "يرجى إدخال رابط صحيح لشكل: https://github.com/owner/repo"
-    return render_template('index.html', repo_url=repo_url, branch=branch, repo_info=repo_info, error=error, zip_url=zip_url)
+            return jsonify({"error": "حدث خطأ أثناء جلب البيانات من GitHub"}), response.status_code
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
+    # تشغيل التطبيق في الوضع التجريبي
     app.run(debug=True)
+
